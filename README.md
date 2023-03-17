@@ -16,6 +16,8 @@ Pretty useful for HTB and other CTFs where you need to do things that are mainly
 
 ```./install.sh```
 
+Note: In some hosts like kali-linux install.sh shows error regarding crackmapexec etc, you can just ignore it and run tool and it will work perfectly fine.
+
 ## Usage:
 
 ```./recon -t https://example.com```
