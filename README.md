@@ -18,7 +18,7 @@ Pretty useful for HTB and other CTFs where you need to do things that are mainly
 ```./recon -t example.com```
 ```./recon -t 10.10.11.42```
 
-Arguments:
-./recon -fh  # for full scan
+
+```./recon -fh  # for full scan```
 
 
