@@ -10,13 +10,14 @@ Pretty useful for HTB and other CTFs where you need to do things that are mainly
 
 ## Installation:
 
-
+```git clone https://github.com/SyedaliHOH/ctfrecki.git  && cd ctfrecki```
+```chmod +x install.sh```
+```./install.sh```
 
 ## Usage:
 
-```./recon -t https://example.com```
-
-```./recon -t 10.10.11.42```
+```./recon -t https://example.com
+./recon -t 10.10.11.42```
 
 Arguments:
 
@@ -25,3 +26,4 @@ Arguments:
 ```./recon -fh  # for fullhttp scan```
 
 
+Thanks For Reading, Make sure to leave a star if you like it.
