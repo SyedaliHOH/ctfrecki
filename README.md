@@ -10,8 +10,10 @@ Pretty useful for HTB and other CTFs where you need to do things that are mainly
 
 ## Installation:
 
-```git clone https://github.com/SyedaliHOH/ctfrecki.git  && cd ctfrecki```
+```git clone https://github.com/SyedaliHOH/ctfrecki.git && cd ctfrecki```
+
 ```chmod +x install.sh```
+
 ```./install.sh```
 
 ## Usage:
