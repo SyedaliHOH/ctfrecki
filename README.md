@@ -15,10 +15,13 @@ Pretty useful for HTB and other CTFs where you need to do things that are mainly
 ## Usage:
 
 ```./recon -t https://example.com```
-```./recon -t example.com```
+
 ```./recon -t 10.10.11.42```
 
+Arguments:
 
-```./recon -fh  # for full scan```
+```./recon -Pn  # Dont check the host using ping before scanning```
+
+```./recon -fh  # for fullhttp scan```
 
 
