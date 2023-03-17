@@ -1,0 +1,1 @@
+pip install requests termcolor bs4

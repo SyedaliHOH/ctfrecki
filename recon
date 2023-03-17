@@ -1,0 +1,429 @@
+#!/usr/bin/python3
+#Importing Libaries:
+    
+# Run all ports for testing:
+# sudo service apache2 start    # http
+# sudo service ssh start
+# sudo service vsftpd start     # ftp
+# sudo service mysql start
+# sudo service rpcbind start
+# sudo systemctl start nfs-kernel-server.service
+
+import os, re, argparse, subprocess, requests, requests.exceptions, time
+from termcolor import colored
+from bs4 import BeautifulSoup
+from urllib.parse import urlparse
+
+#Defining basic-Variables & Functions:
+
+exitmsg = colored('[-]Exiting...', 'red', attrs=['bold'])
+pos = colored("[+] ","green", attrs=['bold'])
+neg = colored("[-] ","red", attrs=['bold'])
+loading = colored("*","yellow", attrs=['bold'])
+askdata = colored("!","yellow", attrs=['bold'])
+
+Yn = colored("[Y/n]: ", attrs=['bold'])
+yN = colored("[y/N]: ", attrs=['bold'])
+
+info = "\033[37m[\033[1m\033[32mInfo\033[0m\033[37m]\033[0m "
+warn = "\033[37m[\033[1m\033[33mWARNING\033[0m\033[37m]\033[0m "
+error = "\033[37m[\033[1m\033[31mERROR\033[0m\033[37m]\033[0m "
+success = "\033[37m[\033[1m\033[32mSUCCESS\033[0m\033[37m]\033[0m "
+input_required = "\033[37m[\033[1m\033[34mINPUT REQUIRED\033[0m\033[37m]\033[0m "
+portenum = "\033[37m[\033[1m\033[32mInfo\033[0m\033[37m]\033[0m "
+
+
+def gt(gtext):
+    print("\n\033[32m"+"\033[38;5;154m# " + gtext + "\033[0m\n")
+
+def blgt(blgttext):
+    return "\033[92;1m" + blgttext + "\033[0m"
+
+def portenum(enumtext):
+    return "\n"+"\033[37m[\033[1m\033[33m" + enumtext + "\033[0m\033[37m]\033[0m "
+
+#Taking Main input and args
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-t", "--target", help="Target Here, -t example.com", required=True)
+parser.add_argument('-Pn', help='Dont use ping to check the host', action='store_true')
+parser.add_argument("-fh", "--fullhttp", help="Use this argument to enable directory enumeration and more web stuff to do on every http port", action="store_true")
+
+args = parser.parse_args()
+obtarget = args.target
+
+# Cleaning Target and Validating it:
+
+
+target = re.sub(r'^https?://', '', obtarget)
+
+if not target:
+    print("Only IP or Domain allowed as target")
+    quit()
+
+ip_pattern = re.compile(r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$')
+domain_pattern = re.compile(r'^(([a-zA-Z0-9]+\.)+[a-zA-Z]{2,})$')
+
+if re.match(ip_pattern, target):
+    print(f"{info}Detected as IP")
+    domain = False
+elif re.match(domain_pattern, target):
+    print(f"{info}Detected as Domain/hostname")
+    domain = True
+else:
+    print(f"{error}Only IP or Domain allowed as target, Remove any '/' etc from end, IPv6 not supported either")
+    quit()
+
+if args.Pn:
+    print(f"{warn}Skipping Ping Check")
+else:
+    response = subprocess.run(["ping", "-c", "1", target], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    if response.returncode == 0:
+        pass
+    else:
+        print(f"{error}{target} is not reachable, If you still believe host is up & connected use -Pn to disable ping check")
+        quit()
+
+
+# Creating Folders for result:
+
+parent_folder = "myresults"
+main_folder = target
+
+def CreateFilesFolder():
+
+    try:
+        os.mkdir(parent_folder)
+    except FileExistsError:
+        pass
+    try:
+        os.mkdir(os.path.join(parent_folder, main_folder))
+    except FileExistsError:
+        pass
+    try:
+        os.mkdir(os.path.join(parent_folder, main_folder, "scans"))
+    except FileExistsError:
+        pass
+    try:
+        os.mkdir(os.path.join(parent_folder, main_folder, "exploits"))
+    except FileExistsError:
+        pass
+    try:
+        os.mkdir(os.path.join(parent_folder, main_folder, "assets"))
+    except FileExistsError:
+        pass
+    try:
+        os.mkdir(os.path.join(parent_folder, main_folder, "report"))
+    except FileExistsError:
+        pass
+
+    vector_file = os.path.join(parent_folder, main_folder, "vector.txt")
+    hash_file = os.path.join(parent_folder, main_folder, "assets", "hash.txt")
+    endpoint_file = os.path.join(parent_folder, main_folder, "assets", "endpoints.txt")
+    requestfile = os.path.join(parent_folder, main_folder, "assets", "req.txt")
+
+    if not os.path.exists(vector_file):
+        with open(vector_file, "w") as f:
+            f.write("# Store Vectors & Endpoints Here:\n")
+
+    if not os.path.exists(hash_file):
+        with open(hash_file, "w") as f:
+            f.write("")
+            
+    if not os.path.exists(endpoint_file):
+        with open(endpoint_file, "w") as f:
+            f.write("## ENDPOINTS HERE ##")
+
+    if not os.path.exists(requestfile):
+        with open(requestfile, "w") as f:
+            f.write("")
+
+
+# Check firewall
+# DEVELOPER Note: Not working properly with local ips: Add chkfirewall() at execution phase to activate this.
+
+def chkfirewall():
+    wafw00f_command = f"wafw00f {target}"
+    print(f'{info}Checking Firewall\n')
+    wafresult = subprocess.run(wafw00f_command, shell=True, stdout=subprocess.PIPE)
+    output = wafresult.stdout.decode("utf-8")
+
+    lines = output.split("\n")
+    for line in lines:
+        if "[+] The site" in line:
+            print(line)
+            break
+    else:
+        print(f"No firewall detected on {target}")
+
+# Nmap
+
+def Nmap():
+    print(f'{info}Starting {blgt("nmap")} scan against {target}')
+
+    nmap_command = f"nmap -sT -T4 -p- -Pn -n -oN ./myresults/{target}/scans/fast-all-tcp.nmap {target} --max-retries 1 --unprivileged -vv"
+    gt(nmap_command)
+    subprocess.run(nmap_command, shell=True, check=True)
+
+    print(f'\n{info}Starting In-Depth Scan on open ports scan against {target}')
+
+    nmap_deep_command = "cat ./myresults/"+target+"/scans/fast-all-tcp.nmap | grep -e open | awk -F '/tcp' '{print $1}' > ./myresults/"+target+"/scans/portlist.txt && nmap -T4 -sT -sV -p $(tr '\n' ',' < ./myresults/"+target+"/scans/portlist.txt) -n -Pn --max-retries 1 "+target+" -oN ./myresults/"+target+"/scans/long-scan.nmap"
+    gt(nmap_deep_command.replace("\n", r"\n"))
+    subprocess.run(nmap_deep_command, shell=True, check=True)
+
+# Subdomain Enumeration
+
+def SubdomainEnumeration():
+    if domain:
+        doenum = input(f"{input_required}Want to perform subdomain enumeration (Y/n): ")
+        
+        if doenum != 'n':
+            print(f"{info}Performing vhost Subdomain Enumeration on {target}")
+
+            def run_command(command):
+                process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                output, error = process.communicate()
+                return output.decode("utf-8")
+            command = f"gobuster vhost -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt --append-domain -u {target}"
+            gt(command)
+            result = run_command(command)
+            print(f"{info}Subdomains found:")
+            print(result)
+        else:
+            print(f'{info}Skipped Subdomain Enumeration')
+    else:
+        print(f"{info}Skipped Subdomain Enumeration on {target} since its a ip")
+
+
+def EnumerateAllPorts():
+
+    # Enumerating Identified services:
+    with open(f'./myresults/{target}/scans/long-scan.nmap', 'r') as f:
+        contents = f.read()
+
+    pattern = r'^(\d+)/tcp\s+open\s+([\w-]+).*$'
+
+    services = {'ftp': [], 'ssh': [], 'http': [], 'mysql': [], 'nfs': [], 'nfs_acl': [], 'rpcbind': []}
+
+    processed_services = set()
+
+    for line in contents.splitlines():
+        # Check if the line matches the pattern
+        match = re.match(pattern, line, re.IGNORECASE)
+        if match:
+            port = int(match.group(1))
+            service = match.group(2).lower()
+            # Check if the service is one of the target services
+            if service in services:
+                services[service].append(port)
+
+    for service, ports in services.items():
+        if ports:
+            if service not in processed_services:
+                processed_services.add(service)
+                for port in ports:
+                    if service == 'ftp':
+                        print(f'{portenum(f"FTP:{port}")}Try anonymous access, check version using "ftp {target} {port}" to see version')
+                    elif service == 'ssh':
+                        print(f'{portenum(f"SSH:{port}")} :D')
+                        pass
+                    elif service == 'http':
+                        httpenum(port)
+                    elif service == 'mysql':
+                        mysqlenum(port)
+                    elif service == 'nfs' or service == 'nfs_acl':
+                        check_nfs(port)
+                    elif service == 'rpcbind':
+                        rpcbindenum(port)
+                        check_rpcnfs(port)
+
+
+# httpenum
+
+def httpenum(port):
+    def run_whatcurl_command(command):
+        try:
+            result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            return result.stdout.decode("utf-8")
+        except Exception as e:
+            return f"Error: {e}"
+
+    curl_command = f"curl -I -s -k {target}:{port} | tee ./myresults/{target}/HTTP/curl-{port}.txt"
+    whatweb_command = f"whatweb -a 3 {target}:{port} | tee ./myresults/{target}/HTTP/whatweb-{port}.txt"
+
+    print(f'{portenum(f"HTTP:{port}")}Checking Response Headers:')
+    gt(f'{curl_command}')
+    print(run_whatcurl_command(curl_command))
+
+    print(f'{portenum(f"HTTP:{port}")}Checking for Web Technologies:')
+    gt(f'{whatweb_command}')
+    print(run_whatcurl_command(whatweb_command))
+
+    print(f'{portenum(f"HTTP:{port}")}Files that may contain more urls:\n')
+
+    def get_url_status(file):
+        url = f"{target}:{port}/{file}"
+        response = subprocess.run(f"curl -s -o /dev/null -w '%{{http_code}}' {url}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        status_code = response.stdout.decode("utf-8").strip()
+        color = "\033[0m"
+        if status_code.startswith("2"):
+            color = "\033[32m"  # green color for 2xx status code
+        elif status_code.startswith("4"):
+            color = "\033[35m"  # purple color for 4xx status code
+        return f"{pos}{target}/{file} exists [{color}{status_code}\033[0m]" if color == "\033[32m" else f"{pos}{target}/{file} doesn't exist [{color}{status_code}\033[0m]"
+
+    print(get_url_status("robots.txt"))
+    print(get_url_status("sitemap.xml"))
+
+    if args.fullhttp:      # Do this if -fh option is enabled
+
+        # Dirsearch
+
+        print(f'{portenum(f"HTTP:{port}")}Dirsearch (No Output File cuz dirsearch output argument is not flexible)")')
+        dirsearch_command = f"dirsearch -u http://{target}:{port}"
+        gt(f'{dirsearch_command}')
+        os.system(dirsearch_command)
+
+        # Link Extractor:
+
+        print(f'{portenum(f"HTTP:{port}")}Extracting Links from main web-page:')
+
+        response = requests.get(f"http://{target}:{port}")
+        soup = BeautifulSoup(response.content, "html.parser")
+
+        links = soup.find_all(["a", "script"])
+
+        external_resources = []
+
+        for link in links:
+            href = link.get("href")
+            src = link.get("src")
+            if href:
+                if href.startswith("/") and len(urlparse(href).path) > 1:
+                    external_resources.append(href)
+            elif src:
+                if "http" in src or "https" in src:
+                    external_resources.append(src)
+
+        extracted_links = os.path.join(parent_folder, main_folder, "scans", f"extracted_links-{port}.txt")
+
+        with open(extracted_links, 'w') as f:
+            for link in external_resources:
+                if not link.startswith("http"):
+                    print(link)
+                    f.write(link + "\n")
+
+            print("\nLibrary or other files:")
+            f.write("\nLibrary or other files:\n")
+            for link in external_resources:
+                if link.startswith("http"):
+                    print(link)
+                    f.write(link + "\n")
+
+# MYSQL:
+
+def mysqlenum(port):
+    print(f'{portenum(f"MYSQL:{port}")}Try mysql -h {target} -u root sometimes its allowed')
+    def run_mysql_command(command):
+        try:
+            result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            return result.stdout.decode("utf-8")
+        except Exception as e:
+            return f"Error: {e}"
+
+    nmap_command = f"nmap -sV -p 3306 --script mysql-audit,mysql-databases,mysql-dump-hashes,mysql-empty-password,mysql-enum,mysql-info,mysql-query,mysql-users,mysql-variables | tee ./myresults/{target}/scans/mysql-nmap-scripts-{port}.txt"
+
+    print(f'{portenum(f"MYSQL:{port}")}Testing detailed nmap scripts againset mysql')
+    gt(f'{nmap_command}')
+    print(run_mysql_command(nmap_command))
+
+# RPCBIND
+
+def rpcbindenum(port):
+    output_file = f"./myresults/{target}/scans/rpcinfo_output.txt"
+    command = f"rpcinfo -p {target} | tee {output_file}"
+    print(f'{portenum(f"RPCBIND:{port}")}rpcinfo result:')
+    gt(f'{command}')
+    subprocess.run(command, shell=True)
+    with open(output_file, "r") as f:
+        output = f.read()
+    return output
+
+nfsoutput_file = f'./myresults/{target}/scans/showmount-rpcbind.txt'
+nfs_output_generated = False
+
+def check_nfs(port):
+    global nfs_output_generated
+    print(f'{portenum(f"NFS:{port}")}Listing all mounts:')
+
+    if not nfs_output_generated:
+        command = f"showmount -e {target} | tee {nfsoutput_file}"
+        gt(f'{command}')
+        subprocess.run(command, shell=True)
+        nfs_output_generated = True
+    else:
+        print(f"Skipping showmount as output file {nfsoutput_file} has already been generated.")
+
+def check_rpcnfs(port):
+    global nfs_output_generated
+    print(f'{portenum(f"RPCBIND:{port}")}Checking rpcinfo:')
+    
+    rpc_file = f"./myresults/{target}/scans/rpcinfo_output.txt"
+
+    if os.path.exists(rpc_file):
+        with open(rpc_file, "r") as f:
+            output = f.readlines()
+        for line in output:
+            if "nfs" in line or "nfs_acl" in line:
+                print(f"{target} has an NFS share")
+                if not nfs_output_generated:
+                    command = f"showmount -e {target} | tee {nfsoutput_file}"
+                    gt(f'{command}')
+                    subprocess.run(command, shell=True)
+                    nfs_output_generated = True
+                else:
+                    print(f"Skipping showmount as output file {nfsoutput_file} has already been generated.")
+                with open(nfsoutput_file, "r") as f:
+                    output = f.read()
+                return output
+                break
+        else:
+            print(f"{target} does not have an NFS share based on rpcbind output.")
+    else:
+        print(f"{rpc_file} not found, please try again and check if output files are working correctly")
+
+##############
+##EXECUTIONS##
+##############
+
+
+try:
+    start_time = time.time()
+
+    CreateFilesFolder()
+    Nmap()
+    print(f'{warn}Automated port enumeration only enumerates ftp, ssh, http, mysql, rpcbind, nfs')
+    print(f'{info}Starting Automated port enumeration on identified ports on {target}\n') 
+    SubdomainEnumeration()
+    EnumerateAllPorts()
+    
+    end_time = time.time()
+
+    elapsed_time = end_time - start_time
+    minutes, seconds = divmod(elapsed_time, 60)
+    seconds = round(seconds)
+    if seconds == 60:
+        minutes += 1
+        seconds = 0
+
+    print(f"\n\n")
+    print(f"{info}All Results are successfully saved in \033[1mmyresults/{target}/scans\033[0m")
+    print(f"{info}Scan finished in {int(minutes):02d}:{seconds:02d}")
+
+except KeyboardInterrupt:
+    print(colored(f"\n{error}User Interrepted","red", attrs=['bold']))
+    raise SystemExit
+
+
+
