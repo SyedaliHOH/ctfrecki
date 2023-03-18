@@ -32,5 +32,3 @@ Arguments:
 
 ```./recon -fh  # for fullhttp scan```
 
-
-Thanks For Reading, Make sure to leave a star if you like it.
