@@ -1,4 +1,4 @@
-# ctfrecki
+# ctfrecki 1.0
 
 ## Introduction:
 
