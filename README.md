@@ -2,9 +2,7 @@
 
 ## Introduction:
 
-This tool does basic recon on your target, Based on open ports.
-if it finds http,mysql,nfs etc it will test everything related to that like Subdomain Enumeration, directory enumeration, Mysql Enumeration etc.
-It also creates a basic Directory Structure for every target and store every output there so you dont have to create a individual folder every target, shows every command its running so its easier to change anything anywhere you like.
+This tool performs basic reconnaissance on your target through open ports. If it detects http, mysql, nfs, etc., it will conduct tests related to those services, such as subdomain and directory enumeration, and mysql enumeration. It also creates a directory structure for each target and stores the output there, making it convenient for the user. The tool displays every command it runs, making it easy to modify as needed.
 
 Pretty useful for HTB and other CTFs where you need to do things that are mainly focused on vulnerbilities.
 
@@ -14,21 +12,15 @@ Pretty useful for HTB and other CTFs where you need to do things that are mainly
 
 ```chmod +x install.sh```
 
-```./install.sh```
+```sudo ./install.sh```
 
 ```chmod +x recon```
 
-Note: In some hosts like kali-linux install.sh shows error regarding crackmapexec etc, you can just ignore it and run tool and it will work perfectly fine.
+For some hosts, like kali-linux, ignore any error or warning messages related to crackmapexec when running install.sh. The tool will still work properly.
 
 ## Usage:
 
 ```./recon -t https://example.com```
 
 ```./recon -t 10.10.11.42```
-
-Arguments:
-
-```./recon -Pn  # Dont check the host using ping before scanning```
-
-```./recon -fh  # for fullhttp scan```
 
