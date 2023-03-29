@@ -1,19 +1,25 @@
 #!/usr/bin/python3
-
 #Importing Libaries:
-import os, re, argparse, subprocess, requests, requests.exceptions, time
+
+import os, re, argparse, subprocess, requests, requests.exceptions, time, ftplib
+import dns.resolver
+import dns.zone
+import dns.query
 from termcolor import colored
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 
 #Defining basic-Variables & Functions:
+
 exitmsg = colored('[-]Exiting...', 'red', attrs=['bold'])
 pos = colored("[+] ","green", attrs=['bold'])
 neg = colored("[-] ","red", attrs=['bold'])
 loading = colored("*","yellow", attrs=['bold'])
 askdata = colored("!","yellow", attrs=['bold'])
+
 Yn = colored("[Y/n]: ", attrs=['bold'])
 yN = colored("[y/N]: ", attrs=['bold'])
+
 info = "\033[37m[\033[1m\033[32mInfo\033[0m\033[37m]\033[0m "
 warn = "\033[37m[\033[1m\033[33mWARNING\033[0m\033[37m]\033[0m "
 error = "\033[37m[\033[1m\033[31mERROR\033[0m\033[37m]\033[0m "
@@ -24,8 +30,10 @@ portenum = "\033[37m[\033[1m\033[32mInfo\033[0m\033[37m]\033[0m "
 
 def gt(gtext):
     print("\n\033[32m"+"\033[38;5;154m# " + gtext + "\033[0m\n")
+
 def blgt(blgttext):
     return "\033[92;1m" + blgttext + "\033[0m"
+
 def portenum(enumtext):
     return "\n"+"\033[37m[\033[1m\033[33m" + enumtext + "\033[0m\033[37m]\033[0m "
 
@@ -33,16 +41,15 @@ def portenum(enumtext):
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-t", "--target", help="Target Here, -t example.com", required=True)
-parser.add_argument('-Pn', help='Dont use ping to check the host', action='store_true')
-parser.add_argument("-fh", "--fullhttp", help="Use this argument to enable directory enumeration and more web stuff to do on every http port", action="store_true")
 
 args = parser.parse_args()
 obtarget = args.target
 
 # Cleaning Target and Validating it:
 
-
 target = re.sub(r'^https?://', '', obtarget)
+# httptarget = "http://"
+# httpstarget = "https://"
 
 if not target:
     print("Only IP or Domain allowed as target")
@@ -51,9 +58,15 @@ if not target:
 ip_pattern = re.compile(r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$')
 domain_pattern = re.compile(r'^(([a-zA-Z0-9]+\.)+[a-zA-Z]{2,})$')
 
+# For Detail params:
+
+pnoption=""
+dnsoption=""
+
 if re.match(ip_pattern, target):
     print(f"{info}Detected as IP")
     domain = False
+    dnsoption="-n"
 elif re.match(domain_pattern, target):
     print(f"{info}Detected as Domain/hostname")
     domain = True
@@ -61,20 +74,9 @@ else:
     print(f"{error}Only IP or Domain allowed as target, Remove any '/' etc from end, IPv6 not supported either")
     quit()
 
-if args.Pn:
-    print(f"{warn}Skipping Ping Check")
-else:
-    response = subprocess.run(["ping", "-c", "1", target], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-    if response.returncode == 0:
-        pass
-    else:
-        print(f"{error}{target} is not reachable, If you still believe host is up & connected use -Pn to disable ping check")
-        quit()
-
-
 # Creating Folders for result:
 
+current_path = os.getcwd()
 parent_folder = "myresults"
 main_folder = target
 
@@ -126,64 +128,79 @@ def CreateFilesFolder():
         with open(requestfile, "w") as f:
             f.write("")
 
-
-# Check firewall
-# DEVELOPER Note: Not working properly with local ips: Add chkfirewall() at execution phase to activate this.
-
-def chkfirewall():
-    wafw00f_command = f"wafw00f {target}"
-    print(f'{info}Checking Firewall\n')
-    wafresult = subprocess.run(wafw00f_command, shell=True, stdout=subprocess.PIPE)
-    output = wafresult.stdout.decode("utf-8")
-
-    lines = output.split("\n")
-    for line in lines:
-        if "[+] The site" in line:
-            print(line)
-            break
-    else:
-        print(f"No firewall detected on {target}")
-
 # Nmap
 
 def Nmap():
     print(f'{info}Starting {blgt("nmap")} scan against {target}')
 
-    nmap_command = f"nmap -sT -T4 -p- -Pn -n -oN ./myresults/{target}/scans/fast-all-tcp.nmap {target} --max-retries 1 --unprivileged -vv"
+    nmap_command = f"nmap -sT -p- -T4 -Pn -n -oN ./myresults/{target}/scans/fast-all-tcp.nmap {target} --max-retries 1 --unprivileged -vv"
     gt(nmap_command)
     subprocess.run(nmap_command, shell=True, check=True)
 
     print(f'\n{info}Starting In-Depth Scan on open ports scan against {target}')
 
-    nmap_deep_command = "cat ./myresults/"+target+"/scans/fast-all-tcp.nmap | grep -e open | awk -F '/tcp' '{print $1}' > ./myresults/"+target+"/scans/portlist.txt && nmap -T4 -sT -sV -p $(tr '\n' ',' < ./myresults/"+target+"/scans/portlist.txt) -n -Pn --max-retries 1 "+target+" -oN ./myresults/"+target+"/scans/long-scan.nmap"
+    nmap_deep_command = f"cat ./myresults/"+target+"/scans/fast-all-tcp.nmap | grep -e open | awk -F '/tcp' '{print $1}' > ./myresults/"+target+"/scans/portlist.txt && nmap -T4 -sT -sV -p $(tr '\n' ',' < ./myresults/"+target+"/scans/portlist.txt) -Pn -n --max-retries 1 "+target+" -oN ./myresults/"+target+"/scans/long-scan.nmap"
     gt(nmap_deep_command.replace("\n", r"\n"))
     subprocess.run(nmap_deep_command, shell=True, check=True)
 
-# Subdomain Enumeration
+# Domain Enumeration
 
-def SubdomainEnumeration():
-    if domain:
-        doenum = input(f"{input_required}Want to perform subdomain enumeration (Y/n): ")
-        
-        if doenum != 'n':
-            print(f"{info}Performing vhost Subdomain Enumeration on {target}")
+def DomainEnumeration():
 
-            def run_command(command):
-                process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                output, error = process.communicate()
-                return output.decode("utf-8")
-            command = f"gobuster vhost -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt --append-domain -u {target}"
-            gt(command)
-            result = run_command(command)
-            print(f"{info}Subdomains found:")
-            print(result)
-        else:
-            print(f'{info}Skipped Subdomain Enumeration')
-    else:
-        print(f"{info}Skipped Subdomain Enumeration on {target} since its a ip")
+    # Subdomain Enumeration:
 
+    print(f"{info}Performing vhost Subdomain Enumeration")
+
+    def run_command(command):
+        process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        output, error = process.communicate()
+        return output.decode("utf-8")
+    command = f"gobuster vhost -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt --append-domain -u {target}"
+    gt(command)
+    result = run_command(command)
+    print(f"{info}Subdomains found:")
+    print(result)
+
+    # Testing ZoneTransfer Attack:
+
+    print(f"{info}Performing Zonetransfer attack")
+
+    ns_records = dns.resolver.resolve(target, 'NS')
+
+    for ns in ns_records:
+        ns = str(ns)
+
+        try:
+            # Resolve the IPv4 and IPv6 addresses for the NS record
+            ipv4_ns = dns.resolver.resolve(ns, 'A')[0].address
+        except dns.resolver.NoAnswer:
+            ipv4_ns = None
+
+        try:
+            ipv6_ns = dns.resolver.resolve(ns, 'AAAA')[0].address
+        except dns.resolver.NoAnswer:
+            ipv6_ns = None
+
+        # Try to perform a zone transfer from the NS record's IPv4 and IPv6 addresses
+        for ns_ip in [ipv4_ns, ipv6_ns]:
+            if ns_ip:
+                try:
+                    zone = dns.zone.from_xfr(dns.query.xfr(ns_ip, target))
+                    print("\n"+"="*80)
+                    print(f"{pos} Zone transfer successful from {ns} ({ns_ip})")
+                    print("="*80+"\n")
+                    for name in zone:
+                        print(zone[name].to_text(name))
+                except:
+                    print(f"\n{neg} Zone transfer failed for {ns} ({ns_ip})\n")
+
+        # Print an error message if both IPv4 and IPv6 addresses were unable to be resolved
+        if not ipv4_ns and not ipv6_ns:
+            print(f"[-] Unable to resolve IP address for {ns}")
 
 def EnumerateAllPorts():
+
+    print(f'{info}Starting Automated port enumeration on identified ports on {target}\n') 
 
     # Enumerating Identified services:
     with open(f'./myresults/{target}/scans/long-scan.nmap', 'r') as f:
@@ -191,7 +208,7 @@ def EnumerateAllPorts():
 
     pattern = r'^(\d+)/tcp\s+open\s+([\w-]+).*$'
 
-    services = {'ftp': [], 'ssh': [], 'http': [], 'mysql': [], 'nfs': [], 'nfs_acl': [], 'rpcbind': []}
+    services = {'ftp': [], 'ssh': [], 'smb':[] ,'imap': [] , 'smtp' : [], 'dns' : [], 'http': [], 'https': [], 'ssl': [], 'mysql': [], 'nfs': [], 'nfs_acl': [], 'rpcbind': [], 'netbios-ssn': [], 'microsoft-ds': []}
 
     processed_services = set()
 
@@ -204,30 +221,135 @@ def EnumerateAllPorts():
             # Check if the service is one of the target services
             if service in services:
                 services[service].append(port)
-
+ 
     for service, ports in services.items():
         if ports:
             if service not in processed_services:
                 processed_services.add(service)
                 for port in ports:
                     if service == 'ftp':
-                        print(f'{portenum(f"FTP:{port}")}Try anonymous access, check version using "ftp {target} {port}" to see version')
-                    elif service == 'ssh':
-                        print(f'{portenum(f"SSH:{port}")} :D')
+                        ftpenum(port)
                         pass
+                    elif service == 'ssh':
+                        sshenum(port)
+                        pass
+                    elif service == 'telnet':
+                        telnetenum(port)
+                        pass
+                    elif service == 'smtp':
+                        smtpenum(port)
+                        pass
+                    elif service == 'dns':
+                        dnsenum(port)
+                        pass
+                    elif service == 'imap':
+                        imapenum(port)
                     elif service == 'http':
                         httpenum(port)
+                        pass
+                    elif service == 'ssl' or service == 'https':
+                        httpsenum(port)
+                        pass
+                    elif service == 'netbios-ssn' or service == 'microsoft-ds':
+                        smbenum(port)
+                        pass
                     elif service == 'mysql':
                         mysqlenum(port)
+                        pass
                     elif service == 'nfs' or service == 'nfs_acl':
                         check_nfs(port)
+                        pass
                     elif service == 'rpcbind':
                         rpcbindenum(port)
                         check_rpcnfs(port)
+                        pass
 
+
+def ftpenum(port):
+    print(f'{portenum(f"FTP:{port}")} Enumerating FTP\n')
+
+    ftp = ftplib.FTP()
+    ftp.connect(target, port)
+
+    # Test for anonymous login
+    try:
+        ftp.login()
+        print(f'{pos}Anonymous login allowed')
+        # Perform additional tests that don't require login credentials
+        # Test for directory traversal vulnerability
+        try:
+            ftp.cwd('../')
+            print(f'{pos}Directory traversal vulnerability found')
+        except:
+            print(f'{neg}Directory traversal vulnerability not found')
+
+        # Test for weak credentials
+        for user in ['admin', 'root', 'test']:
+            for password in ['password', '123456', 'admin']:
+                try:
+                    ftp.login(user, password)
+                    print(pos+'Weak credentials found: {}:{}'.format(user, password))
+                except:
+                    pass
+
+        # Test for upload and download capabilities
+        try:
+            # Upload a test file
+            with open('test.txt', 'w') as f:
+                f.write('Test file')
+            ftp.storlines('STOR test.txt', open('test.txt', 'rb'))
+
+            # Download the test file
+            with open('test.txt', 'wb') as f:
+                ftp.retrbinary('RETR test.txt', f.write)
+
+            print(f'{pos}Upload and download capabilities confirmed')
+        except:
+            print(f'{neg}Upload and download capabilities not confirmed')
+        finally:
+            # Delete the test file from FTP server
+            ftp.delete('test.txt')
+    except:
+        print(f'{neg}Anonymous login not allowed')
+
+    # Delete file from your directory 
+    try:
+        os.remove('test.txt')
+    except:
+        pass
+
+    # Close the connection
+    ftp.quit()
+
+def sshenum(port):
+    print(f'{portenum(f"SSH:{port}")}Enumerating SSH')
+    command = f"./tools/ssh-audit/ssh-audit.py {target} --port={port} -n | tee ./myresults/{target}/scans/ssh-audit-{port}.txt"
+    gt(f'{command}')
+    os.system(command)
+
+def telnetenum(port):
+    print(f'{portenum(f"TELNET:{port}")}Enumerating Telnet')
+    command = f'nmap -n -sV -Pn --script "*telnet* and safe" -p {port} {target} -oN ./myresults/{target}/scans/telnet-{port}.txt'
+    gt(f'{command}')
+    os.system(command)
+
+# Smtp
+
+def smtpenum(port):
+    print(f'{portenum(f"SMTP:{port}")}Enumerating SMB')
+    command = f'nmap -Pn --script --script=smtp-commands,smtp-enum-users,smtp-vuln-cve2010-4344,smtp-vuln-cve2011-1720,smtp-vuln-cve2011-1764 -p {port} {target} -oN ./myresults/{target}/scans/smtp-{port}.txt'
+    gt(f'{command}')
+    os.system(command)    
+
+# DNS
+
+def dnsenum(port):
+    print(f'{portenum(f"DNS:{port}")}Enumerating DNS')
+    command = f'nmap -Pn --script --script="(*dns* and (default or (discovery and safe))) or dns-random-txid or dns-random-srcport" -p {port} {target} -oN ./myresults/{target}/scans/smtp_commands-{port}.txt'
+    gt(f'{command}')
+    os.system(command)  
 
 # httpenum
-
 def httpenum(port):
     def run_whatcurl_command(command):
         try:
@@ -263,50 +385,79 @@ def httpenum(port):
     print(get_url_status("robots.txt"))
     print(get_url_status("sitemap.xml"))
 
-    if args.fullhttp:      # Do this if -fh option is enabled
+    # Dirsearch
 
-        # Dirsearch
+    print(f'{portenum(f"HTTP:{port}")}Dirsearch')
+    dirsearch_command = f"dirsearch -u http://{target}:{port} -o {current_path}/myresults/{target}/scans/dirsearch-{port}.txt"
+    gt(f'{dirsearch_command}')
+    os.system(dirsearch_command)
 
-        print(f'{portenum(f"HTTP:{port}")}Dirsearch (No Output File cuz dirsearch output argument is not flexible)")')
-        dirsearch_command = f"dirsearch -u http://{target}:{port}"
-        gt(f'{dirsearch_command}')
-        os.system(dirsearch_command)
+    # Finding Tokens, links etc
 
-        # Link Extractor:
+    print(f'{portenum(f"HTTP:{port}")}Extracting tokens, secret keys, useful links target:')
+    linkfinder_cmd = f"python3 ./tools/linkfinder.py -i http://{target}:{port} -d -o cli | tee ./myresults/{target}/scans/links-{port}.txt"
+    gt(f'{linkfinder_cmd}')
+    os.system(linkfinder_cmd)
 
-        print(f'{portenum(f"HTTP:{port}")}Extracting Links from main web-page:')
+    secretfinder_cmd = f"python3 ./tools/SecretFinder.py -i http://{target}:{port} -e -o ./myresults/{target}/scans/SecretFinder-{port}.html"
+    gt(f'{secretfinder_cmd}')
+    os.system(secretfinder_cmd)
 
-        response = requests.get(f"http://{target}:{port}")
-        soup = BeautifulSoup(response.content, "html.parser")
+    print(f'{portenum(f"HTTP:{port}")}Finding parameters, Output wont be displayed since it can be huge:')
+    paramspider = f"python3 ./tools/paramspider/paramspider.py --quiet --domain {target}:{port} --exclude woff,css,js,png,svg,jpg -o ./myresults/{target}/scans/Parameters-{port}.txt"
+    gt(f'{paramspider}')
+    os.system(paramspider)
 
-        links = soup.find_all(["a", "script"])
+    print(f'{portenum(f"HTTP:{port}")}Testing HTTP Methods, results wont be stored for 2nd check:')
+    nmap_httptesting = f"nmap -p{port} -sV --script http-method-tamper {target} -oN ./myresults/{target}/scans/HTTP_Methods-{port}.txt"
+    gt(f'{nmap_httptesting}')
+    os.system(nmap_httptesting)
 
-        external_resources = []
+    methods = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 
-        for link in links:
-            href = link.get("href")
-            src = link.get("src")
-            if href:
-                if href.startswith("/") and len(urlparse(href).path) > 1:
-                    external_resources.append(href)
-            elif src:
-                if "http" in src or "https" in src:
-                    external_resources.append(src)
+    print('\n====2nd Check of HTTP Methods====\n')
+    for method in methods:
+        response = requests.request(method, f"http://{target}:{port}")
+        if response.status_code != 404:
+            print('{}: {}'.format(method, response.status_code))
 
-        extracted_links = os.path.join(parent_folder, main_folder, "scans", f"extracted_links-{port}.txt")
+# SSL/HTTPS:
 
-        with open(extracted_links, 'w') as f:
-            for link in external_resources:
-                if not link.startswith("http"):
-                    print(link)
-                    f.write(link + "\n")
+def httpsenum(port):
+    print(f'{portenum(f"SSL/HTTPS:{port}")}Scanning for ssl/https vulnerbilities')
+    sslscan = f"sslscan --no-colour {target}:{port} | tee ./myresults/{target}/scans/sslscan-{port}.txt"
+    gt(f'{sslscan}')
+    os.system(sslscan)
 
-            print("\nLibrary or other files:")
-            f.write("\nLibrary or other files:\n")
-            for link in external_resources:
-                if link.startswith("http"):
-                    print(link)
-                    f.write(link + "\n")
+# SMB:
+def smbenum(port):
+
+    # Run enum4linux command
+    print(f'{portenum(f"SMB:{port}")}')
+    enum4linuxcommand = f"enum4linux -a {target}"
+    gt(f'{enum4linuxcommand}')
+    output_bytes = subprocess.check_output(enum4linuxcommand, shell=True)
+
+    # Convert output to string
+    output_str = output_bytes.decode('utf-8')
+
+    # Remove color codes from output for writing to file
+    output_str_no_color = re.sub(r'\x1b\[[0-9;]*m', '', output_str)
+
+    # Write output to file without color codes
+    with open(f'myresults/{target}/scans/enum4linux_output-{port}.txt', 'w') as f:
+        f.write(output_str_no_color)
+
+    # Print output to terminal with colors
+    print(output_str)
+
+# IMAP
+
+def imapenum(port):
+    print(f'{portenum(f"IMAP:{port}Enumerating IMAP")} {target} ')
+    command = f'nmap -Pn --script "imap* and default" -sV -p {port} {target} -oN ./myresults/{target}/scans/imap-{port}.txt'
+    gt(f'{command}')
+    os.system(command)  
 
 # MYSQL:
 
@@ -319,11 +470,11 @@ def mysqlenum(port):
         except Exception as e:
             return f"Error: {e}"
 
-    nmap_command = f"nmap -sV -p 3306 --script mysql-audit,mysql-databases,mysql-dump-hashes,mysql-empty-password,mysql-enum,mysql-info,mysql-query,mysql-users,mysql-variables | tee ./myresults/{target}/scans/mysql-nmap-scripts-{port}.txt"
+    nmap_mysql_command = f"nmap -sV -p 3306 --script mysql-audit,mysql-databases,mysql-dump-hashes,mysql-empty-password,mysql-enum,mysql-info,mysql-query,mysql-users,mysql-variables | tee ./myresults/{target}/scans/mysql-nmap-scripts-{port}.txt"
 
     print(f'{portenum(f"MYSQL:{port}")}Testing detailed nmap scripts againset mysql')
-    gt(f'{nmap_command}')
-    print(run_mysql_command(nmap_command))
+    gt(f'{nmap_mysql_command}')
+    print(run_mysql_command(nmap_mysql_command))
 
 # RPCBIND
 
@@ -350,7 +501,7 @@ def check_nfs(port):
         subprocess.run(command, shell=True)
         nfs_output_generated = True
     else:
-        print(f"Skipping showmount as output file {nfsoutput_file} has already been generated.")
+        print(f"Skipping showmount as output file since {nfsoutput_file} has already been generated.")
 
 def check_rpcnfs(port):
     global nfs_output_generated
@@ -384,17 +535,15 @@ def check_rpcnfs(port):
 ##EXECUTIONS##
 ##############
 
-
 try:
     start_time = time.time()
 
     CreateFilesFolder()
     Nmap()
-    print(f'{warn}Automated port enumeration only enumerates ftp, ssh, http, mysql, rpcbind, nfs')
-    print(f'{info}Starting Automated port enumeration on identified ports on {target}\n') 
-    SubdomainEnumeration()
+    if domain:
+        DomainEnumeration()
     EnumerateAllPorts()
-    
+
     end_time = time.time()
 
     elapsed_time = end_time - start_time
@@ -405,12 +554,12 @@ try:
         seconds = 0
 
     print(f"\n\n")
-    print(f"{info}All Results are successfully saved in \033[1mmyresults/{target}/scans\033[0m")
+    print(f"{info}All Results are successfully saved in current directory at \033[1mmyresults/{target}/scans\033[0m")
     print(f"{info}Scan finished in {int(minutes):02d}:{seconds:02d}")
 
 except KeyboardInterrupt:
     print(colored(f"\n{error}User Interrepted","red", attrs=['bold']))
     raise SystemExit
 
-
+#Port Integration: https://book.hacktricks.xyz/generic-methodologies-and-resources/pentesting-network
 
