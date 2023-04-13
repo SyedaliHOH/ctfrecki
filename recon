@@ -159,7 +159,11 @@ def DomainEnumeration():
 
     print(f"{info}Performing Zonetransfer attack")
 
-    ns_records = dns.resolver.resolve(target, 'NS')
+    try:
+        ns_records = dns.resolver.resolve(target, 'NS')
+    except dns.resolver.NXDOMAIN:
+        print(f"{neg}DNS resolution failed for {target}")
+        exit(1)
 
     for ns in ns_records:
         ns = str(ns)
@@ -180,13 +184,13 @@ def DomainEnumeration():
             if ns_ip:
                 try:
                     zone = dns.zone.from_xfr(dns.query.xfr(ns_ip, target))
-                    print("\n"+"="*80)
-                    print(f"{pos} Zone transfer successful from {ns} ({ns_ip})")
-                    print("="*80+"\n")
+                    print("\n" + "=" * 80)
+                    print(f"{pos}Zone transfer successful from {ns} ({ns_ip})")
+                    print("=" * 80 + "\n")
                     for name in zone:
                         print(zone[name].to_text(name))
                 except:
-                    print(f"\n{neg} Zone transfer failed for {ns} ({ns_ip})\n")
+                    print(f"\n{pos}Zone transfer failed for {ns} ({ns_ip})\n")
 
         # Print an error message if both IPv4 and IPv6 addresses were unable to be resolved
         if not ipv4_ns and not ipv6_ns:
