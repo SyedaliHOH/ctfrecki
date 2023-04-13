@@ -41,6 +41,15 @@ def portenum(enumtext):
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-t", "--target", help="Target Here, -t example.com", required=True)
+# parser.add_argument("-c", "--ctf", help="recon it like a ctf", action="store_true")
+
+args = parser.parse_args()
+
+# if args.ctf:
+#     print(f"{pos}CTF mode is enabled")
+# else:
+#     print(f"{warn}CTF mode is disabled, Engaging like an actual target")
+
 
 args = parser.parse_args()
 obtarget = args.target
@@ -60,9 +69,6 @@ domain_pattern = re.compile(r'^(([a-zA-Z0-9]+\.)+[a-zA-Z]{2,})$')
 
 # For Detail params:
 
-pnoption=""
-dnsoption=""
-
 if re.match(ip_pattern, target):
     print(f"{info}Detected as IP")
     domain = False
@@ -80,36 +86,28 @@ current_path = os.getcwd()
 parent_folder = "myresults"
 main_folder = target
 
-def CreateFilesFolder():
+folder_path = parent_folder+"/"+main_folder
 
-    try:
-        os.mkdir(parent_folder)
-    except FileExistsError:
+def create_files_folder():
+
+    if os.path.exists(folder_path):
+        # Folder already exists, prompt user to run scan
+        user_input = input(f"{input_required}Folder already exists. Do you want to run a scan on the application again? Existing results will be overwritten {Yn} ")
+        if user_input.lower() == "n":
+            print("Aborted")
+            exit()
+        else:
+            pass
+    else:
+        # Folder doesn't exist, do nothing
         pass
-    try:
-        os.mkdir(os.path.join(parent_folder, main_folder))
-    except FileExistsError:
-        pass
-    try:
-        os.mkdir(os.path.join(parent_folder, main_folder, "scans"))
-    except FileExistsError:
-        pass
-    try:
-        os.mkdir(os.path.join(parent_folder, main_folder, "exploits"))
-    except FileExistsError:
-        pass
-    try:
-        os.mkdir(os.path.join(parent_folder, main_folder, "assets"))
-    except FileExistsError:
-        pass
-    try:
-        os.mkdir(os.path.join(parent_folder, main_folder, "report"))
-    except FileExistsError:
-        pass
+
+    folders = ['scans', 'exploits', 'assets', 'report']
+    for folder in folders:
+        os.makedirs(os.path.join(parent_folder, main_folder, folder), exist_ok=True)
 
     vector_file = os.path.join(parent_folder, main_folder, "vector.txt")
     hash_file = os.path.join(parent_folder, main_folder, "assets", "hash.txt")
-    endpoint_file = os.path.join(parent_folder, main_folder, "assets", "endpoints.txt")
     requestfile = os.path.join(parent_folder, main_folder, "assets", "req.txt")
 
     if not os.path.exists(vector_file):
@@ -118,28 +116,24 @@ def CreateFilesFolder():
 
     if not os.path.exists(hash_file):
         with open(hash_file, "w") as f:
-            f.write("")
-            
-    if not os.path.exists(endpoint_file):
-        with open(endpoint_file, "w") as f:
-            f.write("## ENDPOINTS HERE ##")
+            pass
 
     if not os.path.exists(requestfile):
         with open(requestfile, "w") as f:
-            f.write("")
+            pass
 
 # Nmap
 
-def Nmap():
+def nmap():
     print(f'{info}Starting {blgt("nmap")} scan against {target}')
 
-    nmap_command = f"nmap -sT -p- -T4 -Pn -n -oN ./myresults/{target}/scans/fast-all-tcp.nmap {target} --max-retries 1 --unprivileged -vv"
+    nmap_command = f"nmap -sT -p- -T4 -Pn -n -oN {parent_folder}/{target}/scans/fast-all-tcp.nmap {target} --max-retries 1 --unprivileged -vv"
     gt(nmap_command)
     subprocess.run(nmap_command, shell=True, check=True)
 
     print(f'\n{info}Starting In-Depth Scan on open ports scan against {target}')
 
-    nmap_deep_command = f"cat ./myresults/"+target+"/scans/fast-all-tcp.nmap | grep -e open | awk -F '/tcp' '{print $1}' > ./myresults/"+target+"/scans/portlist.txt && nmap -T4 -sT -sV -p $(tr '\n' ',' < ./myresults/"+target+"/scans/portlist.txt) -Pn -n --max-retries 1 "+target+" -oN ./myresults/"+target+"/scans/long-scan.nmap"
+    nmap_deep_command = f"cat {parent_folder}/"+target+"/scans/fast-all-tcp.nmap | grep -e open | awk -F '/tcp' '{print $1}' > ./"+parent_folder+"/"+target+"/scans/portlist.txt && nmap -T4 -sT -sV -p $(tr '\n' ',' < ./"+parent_folder+"/"+target+"/scans/portlist.txt) -Pn -n --max-retries 1 "+target+" -oN ./"+parent_folder+"/"+target+"/scans/long-scan.nmap"
     gt(nmap_deep_command.replace("\n", r"\n"))
     subprocess.run(nmap_deep_command, shell=True, check=True)
 
@@ -198,75 +192,111 @@ def DomainEnumeration():
         if not ipv4_ns and not ipv6_ns:
             print(f"[-] Unable to resolve IP address for {ns}")
 
+
 def EnumerateAllPorts():
 
-    print(f'{info}Starting Automated port enumeration on identified ports on {target}\n') 
+    services = {
+        'ftp': ftpenum,
+        'ssh': sshenum,
+        'telnet': telnetenum,
+        'smtp': smtpenum,
+        'dns': dnsenum,
+        'imap': imapenum,
+        'http': httpenum,
+        'http-proxy': httpenum,
+        'ssl': httpsenum,
+        'https': httpsenum,
+        'http-alt': httpenum,
+        'http-proxy-url': httpenum,
+        'http-mgmt': httpenum,
+        'pop3': pop3enum,
+        'pop3s': pop3enum,
+        'imap3': imapenum,
+        'imap4': imapenum,
+        'netbios-ssn': smbenum,
+        'microsoft-ds': smbenum,
+        'mysql': mysqlenum,
+        # 'postgresql': postgresenum,
+        # 'mssql': mssqlenum,
+        # 'oracle': oracleenum,
+        'ftp-data': ftpenum,
+        'smtps': smtpenum,
+        'smtp-submission': smtpenum,
+        'rpcbind': rpcbindenum,
+        'smb': smbenum,
+        'samba': smbenum,
+        'https-alt': httpsenum,
+        'imaps': imapenum,
+        'pop3p': pop3enum,
+        # 'rdp': rdpenum,
+        # 'vnc': vncenum,
+        'nfs': check_nfs,
+        'nfs_acl': check_nfs,
+        'cifs': smbenum,
+        'http-tunnel': httpenum,
+        'ldap': ldapenum,
+        'ldaps': ldapenum,
+        # 'redis': redisenum,
+        'mongodb': mongodbenum,
+        'ftp-control': ftpenum,
+        'whois': whoisenum,
+        'mysql-proxy': mysqlenum,
+        'smtp-ndr': smtpenum,
+        'smtps': smtpenum,
+        'ssh': sshenum,
+        'ssl/http': httpsenum,
+        'ssh-keyexchange': sshenum,
+        'imap': imapenum,
+        'poppassd': pop3enum,
+        'nfsd': check_nfs,
+        'ldap2': ldapenum,
+        'ldap3': ldapenum,
+        'www': httpenum,
+        # 'exec': execenum,
+        # 'login': loginenum,
+        # 'shell': shellenum,
+        # 'printer': printerenum,
+        # 'rsync': rsyncenum,
+        'tcpwrapped': genericenum,
+        'unknown': genericenum
+    }
+
+    print(f'{info}Starting Automated port enumeration on identified ports\n') 
 
     # Enumerating Identified services:
-    with open(f'./myresults/{target}/scans/long-scan.nmap', 'r') as f:
+    with open(f'{parent_folder}/{target}/scans/fast-all-tcp.nmap', 'r') as f:
         contents = f.read()
 
     pattern = r'^(\d+)/tcp\s+open\s+([\w-]+).*$'
 
-    services = {'ftp': [], 'ssh': [], 'smb':[] ,'imap': [] , 'smtp' : [], 'dns' : [], 'http': [], 'https': [], 'ssl': [], 'mysql': [], 'nfs': [], 'nfs_acl': [], 'rpcbind': [], 'netbios-ssn': [], 'microsoft-ds': []}
-
-    processed_services = set()
-
     for line in contents.splitlines():
-        # Check if the line matches the pattern
         match = re.match(pattern, line, re.IGNORECASE)
         if match:
             port = int(match.group(1))
             service = match.group(2).lower()
-            # Check if the service is one of the target services
             if service in services:
-                services[service].append(port)
- 
-    for service, ports in services.items():
-        if ports:
-            if service not in processed_services:
-                processed_services.add(service)
-                for port in ports:
-                    if service == 'ftp':
-                        ftpenum(port)
-                        pass
-                    elif service == 'ssh':
-                        sshenum(port)
-                        pass
-                    elif service == 'telnet':
-                        telnetenum(port)
-                        pass
-                    elif service == 'smtp':
-                        smtpenum(port)
-                        pass
-                    elif service == 'dns':
-                        dnsenum(port)
-                        pass
-                    elif service == 'imap':
-                        imapenum(port)
-                    elif service == 'http':
-                        httpenum(port)
-                        pass
-                    elif service == 'ssl' or service == 'https':
-                        httpsenum(port)
-                        pass
-                    elif service == 'netbios-ssn' or service == 'microsoft-ds':
-                        smbenum(port)
-                        pass
-                    elif service == 'mysql':
-                        mysqlenum(port)
-                        pass
-                    elif service == 'nfs' or service == 'nfs_acl':
-                        check_nfs(port)
-                        pass
-                    elif service == 'rpcbind':
-                        rpcbindenum(port)
-                        check_rpcnfs(port)
-                        pass
+                services[service](port)
 
+def mongodbenum(port):
+    print(f'{portenum(f"MONGODB:{port}")}Enumerating WHOIS\n')
+
+    command = f'nmap -sV --script "mongo* and default" {target} -p {port} -oN ./{parent_folder}/{target}/scans/mongodb-{port}.txt'
+    os.system(command)
+
+def whoisenum(port):
+    print(f'{portenum(f"WHOIS:{port}")}WHOIS\n')
+
+    whois = f'whois {target} | tee ./{parent_folder}/{target}/scans/whois-{port}.txt'
+    os.system(whois)
+
+def ldapenum(port):
+    print(f'{portenum(f"LDAP:{port}")}Enumerating LDAP\n')
+
+    command = f'nmap -n -sV --script "ldap* and not brute" {target} -p {port} -oN ./{parent_folder}/{target}/scans/ldap-{port}.txt'
+    os.system(command)
 
 def ftpenum(port):
-    print(f'{portenum(f"FTP:{port}")} Enumerating FTP\n')
+    print(f'{portenum(f"FTP:{port}")}Enumerating FTP\n')
 
     ftp = ftplib.FTP()
     ftp.connect(target, port)
@@ -321,23 +351,27 @@ def ftpenum(port):
     # Close the connection
     ftp.quit()
 
+def pop3enum(port):
+    command = f'nmap --script "pop3-capabilities or pop3-ntlm-info" -sV -port {port} {target} -oN ./{parent_folder}/{target}/scans/pop3-{port}.txt'
+    os.system(command)
+
 def sshenum(port):
     print(f'{portenum(f"SSH:{port}")}Enumerating SSH')
-    command = f"./tools/ssh-audit/ssh-audit.py {target} --port={port} -n | tee ./myresults/{target}/scans/ssh-audit-{port}.txt"
+    command = f"./tools/ssh-audit/ssh-audit.py {target} --port={port} -n | tee ./{parent_folder}/{target}/scans/ssh-audit-{port}.txt"
     gt(f'{command}')
     os.system(command)
 
 def telnetenum(port):
     print(f'{portenum(f"TELNET:{port}")}Enumerating Telnet')
-    command = f'nmap -n -sV -Pn --script "*telnet* and safe" -p {port} {target} -oN ./myresults/{target}/scans/telnet-{port}.txt'
+    command = f'nmap -n -sV -Pn --script "*telnet* and safe" -p {port} {target} -oN ./{parent_folder}/{target}/scans/telnet-{port}.txt'
     gt(f'{command}')
     os.system(command)
 
 # Smtp
 
 def smtpenum(port):
-    print(f'{portenum(f"SMTP:{port}")}Enumerating SMB')
-    command = f'nmap -Pn --script --script=smtp-commands,smtp-enum-users,smtp-vuln-cve2010-4344,smtp-vuln-cve2011-1720,smtp-vuln-cve2011-1764 -p {port} {target} -oN ./myresults/{target}/scans/smtp-{port}.txt'
+    print(f'{portenum(f"SMTP:{port}")}Enumerating SMTP')
+    command = f'nmap -Pn --script=smtp-commands,smtp-enum-users,smtp-vuln-cve2010-4344,smtp-vuln-cve2011-1720,smtp-vuln-cve2011-1764 -p {port} {target} -oN ./{parent_folder}/{target}/scans/smtp-{port}.txt'
     gt(f'{command}')
     os.system(command)    
 
@@ -345,7 +379,7 @@ def smtpenum(port):
 
 def dnsenum(port):
     print(f'{portenum(f"DNS:{port}")}Enumerating DNS')
-    command = f'nmap -Pn --script --script="(*dns* and (default or (discovery and safe))) or dns-random-txid or dns-random-srcport" -p {port} {target} -oN ./myresults/{target}/scans/smtp_commands-{port}.txt'
+    command = f'nmap -Pn --script --script="(*dns* and (default or (discovery and safe))) or dns-random-txid or dns-random-srcport" -p {port} {target} -oN ./{parent_folder}/{target}/scans/smtp_commands-{port}.txt'
     gt(f'{command}')
     os.system(command)  
 
@@ -358,8 +392,8 @@ def httpenum(port):
         except Exception as e:
             return f"Error: {e}"
 
-    curl_command = f"curl -I -s -k {target}:{port} | tee ./myresults/{target}/HTTP/curl-{port}.txt"
-    whatweb_command = f"whatweb -a 3 {target}:{port} | tee ./myresults/{target}/HTTP/whatweb-{port}.txt"
+    curl_command = f"curl -I -s -k {target}:{port} | tee ./{parent_folder}/{target}/HTTP/curl-{port}.txt"
+    whatweb_command = f"whatweb -a 3 {target}:{port} | tee ./{parent_folder}/{target}/HTTP/whatweb-{port}.txt"
 
     print(f'{portenum(f"HTTP:{port}")}Checking Response Headers:')
     gt(f'{curl_command}')
@@ -380,7 +414,7 @@ def httpenum(port):
             color = "\033[32m"  # green color for 2xx status code
         elif status_code.startswith("4"):
             color = "\033[35m"  # purple color for 4xx status code
-        return f"{pos}{target}/{file} exists [{color}{status_code}\033[0m]" if color == "\033[32m" else f"{pos}{target}/{file} doesn't exist [{color}{status_code}\033[0m]"
+        return f"{pos}{target}:{port}/{file} exists [{color}{status_code}\033[0m]" if color == "\033[32m" else f"{pos}{target}/{file} doesn't exist [{color}{status_code}\033[0m]"
 
     print(get_url_status("robots.txt"))
     print(get_url_status("sitemap.xml"))
@@ -388,28 +422,28 @@ def httpenum(port):
     # Dirsearch
 
     print(f'{portenum(f"HTTP:{port}")}Dirsearch')
-    dirsearch_command = f"dirsearch -u http://{target}:{port} -o {current_path}/myresults/{target}/scans/dirsearch-{port}.txt"
+    dirsearch_command = f"dirsearch -u http://{target}:{port} -o {current_path}/{parent_folder}/{target}/scans/dirsearch-{port}.txt"
     gt(f'{dirsearch_command}')
     os.system(dirsearch_command)
 
     # Finding Tokens, links etc
 
     print(f'{portenum(f"HTTP:{port}")}Extracting tokens, secret keys, useful links target:')
-    linkfinder_cmd = f"python3 ./tools/linkfinder.py -i http://{target}:{port} -d -o cli | tee ./myresults/{target}/scans/links-{port}.txt"
+    linkfinder_cmd = f"python3 ./tools/linkfinder.py -i http://{target}:{port} -d -o cli | tee ./{parent_folder}/{target}/scans/links-{port}.txt"
     gt(f'{linkfinder_cmd}')
     os.system(linkfinder_cmd)
 
-    secretfinder_cmd = f"python3 ./tools/SecretFinder.py -i http://{target}:{port} -e -o ./myresults/{target}/scans/SecretFinder-{port}.html"
+    secretfinder_cmd = f"python3 ./tools/SecretFinder.py -i http://{target}:{port} -e -o ./{parent_folder}/{target}/scans/SecretFinder-{port}.html"
     gt(f'{secretfinder_cmd}')
     os.system(secretfinder_cmd)
 
     print(f'{portenum(f"HTTP:{port}")}Finding parameters, Output wont be displayed since it can be huge:')
-    paramspider = f"python3 ./tools/paramspider/paramspider.py --quiet --domain {target}:{port} --exclude woff,css,js,png,svg,jpg -o ./myresults/{target}/scans/Parameters-{port}.txt"
+    paramspider = f"python3 ./tools/paramspider/paramspider.py --quiet --domain {target}:{port} --exclude woff,css,js,png,svg,jpg -o ./{parent_folder}/{target}/scans/Parameters-{port}.txt"
     gt(f'{paramspider}')
     os.system(paramspider)
 
     print(f'{portenum(f"HTTP:{port}")}Testing HTTP Methods, results wont be stored for 2nd check:')
-    nmap_httptesting = f"nmap -p{port} -sV --script http-method-tamper {target} -oN ./myresults/{target}/scans/HTTP_Methods-{port}.txt"
+    nmap_httptesting = f"nmap -p{port} -sV --script http-method-tamper {target} -oN ./{parent_folder}/{target}/scans/HTTP_Methods-{port}.txt"
     gt(f'{nmap_httptesting}')
     os.system(nmap_httptesting)
 
@@ -425,7 +459,7 @@ def httpenum(port):
 
 def httpsenum(port):
     print(f'{portenum(f"SSL/HTTPS:{port}")}Scanning for ssl/https vulnerbilities')
-    sslscan = f"sslscan --no-colour {target}:{port} | tee ./myresults/{target}/scans/sslscan-{port}.txt"
+    sslscan = f"sslscan --no-colour {target}:{port} | tee ./{parent_folder}/{target}/scans/sslscan-{port}.txt"
     gt(f'{sslscan}')
     os.system(sslscan)
 
@@ -445,7 +479,7 @@ def smbenum(port):
     output_str_no_color = re.sub(r'\x1b\[[0-9;]*m', '', output_str)
 
     # Write output to file without color codes
-    with open(f'myresults/{target}/scans/enum4linux_output-{port}.txt', 'w') as f:
+    with open(f'{parent_folder}/{target}/scans/enum4linux_output-{port}.txt', 'w') as f:
         f.write(output_str_no_color)
 
     # Print output to terminal with colors
@@ -455,7 +489,7 @@ def smbenum(port):
 
 def imapenum(port):
     print(f'{portenum(f"IMAP:{port}Enumerating IMAP")} {target} ')
-    command = f'nmap -Pn --script "imap* and default" -sV -p {port} {target} -oN ./myresults/{target}/scans/imap-{port}.txt'
+    command = f'nmap -Pn --script "imap* and default" -sV -p {port} {target} -oN ./{parent_folder}/{target}/scans/imap-{port}.txt'
     gt(f'{command}')
     os.system(command)  
 
@@ -470,7 +504,7 @@ def mysqlenum(port):
         except Exception as e:
             return f"Error: {e}"
 
-    nmap_mysql_command = f"nmap -sV -p 3306 --script mysql-audit,mysql-databases,mysql-dump-hashes,mysql-empty-password,mysql-enum,mysql-info,mysql-query,mysql-users,mysql-variables | tee ./myresults/{target}/scans/mysql-nmap-scripts-{port}.txt"
+    nmap_mysql_command = f"nmap -sV -p 3306 --script mysql-audit,mysql-databases,mysql-dump-hashes,mysql-empty-password,mysql-enum,mysql-info,mysql-query,mysql-users,mysql-variables | tee ./{parent_folder}/{target}/scans/mysql-nmap-scripts-{port}.txt"
 
     print(f'{portenum(f"MYSQL:{port}")}Testing detailed nmap scripts againset mysql')
     gt(f'{nmap_mysql_command}')
@@ -479,7 +513,7 @@ def mysqlenum(port):
 # RPCBIND
 
 def rpcbindenum(port):
-    output_file = f"./myresults/{target}/scans/rpcinfo_output.txt"
+    output_file = f"./{parent_folder}/{target}/scans/rpcinfo_output.txt"
     command = f"rpcinfo -p {target} | tee {output_file}"
     print(f'{portenum(f"RPCBIND:{port}")}rpcinfo result:')
     gt(f'{command}')
@@ -488,7 +522,7 @@ def rpcbindenum(port):
         output = f.read()
     return output
 
-nfsoutput_file = f'./myresults/{target}/scans/showmount-rpcbind.txt'
+nfsoutput_file = f'./{parent_folder}/{target}/scans/showmount-rpcbind.txt'
 nfs_output_generated = False
 
 def check_nfs(port):
@@ -507,7 +541,7 @@ def check_rpcnfs(port):
     global nfs_output_generated
     print(f'{portenum(f"RPCBIND:{port}")}Checking rpcinfo:')
     
-    rpc_file = f"./myresults/{target}/scans/rpcinfo_output.txt"
+    rpc_file = f"./{parent_folder}/{target}/scans/rpcinfo_output.txt"
 
     if os.path.exists(rpc_file):
         with open(rpc_file, "r") as f:
@@ -531,6 +565,16 @@ def check_rpcnfs(port):
     else:
         print(f"{rpc_file} not found, please try again and check if output files are working correctly")
 
+def genericenum(port):
+    print(f'{portenum(f"(unknown):{port}")} Nmap on port:')
+
+    # Basic enumeration commands
+    os.system(f"nmap -sV -sC -p {port} -oN {parent_folder}/{main_folder}/scans/unknown-{port}.nmap {target}")
+
+    print(f'{portenum(f"(unknown):{port}")} Running Curl:')
+    os.system(f"curl {target}:{port} | tee {parent_folder}/{main_folder}/scans/unknown-{port}.nmap {target}")
+
+
 ##############
 ##EXECUTIONS##
 ##############
@@ -538,8 +582,8 @@ def check_rpcnfs(port):
 try:
     start_time = time.time()
 
-    CreateFilesFolder()
-    Nmap()
+    create_files_folder()
+    nmap()
     if domain:
         DomainEnumeration()
     EnumerateAllPorts()
@@ -554,12 +598,9 @@ try:
         seconds = 0
 
     print(f"\n\n")
-    print(f"{info}All Results are successfully saved in current directory at \033[1mmyresults/{target}/scans\033[0m")
+    print(f"{info}All Results are successfully saved in current directory at \033[1m{parent_folder}/{target}/scans\033[0m")
     print(f"{info}Scan finished in {int(minutes):02d}:{seconds:02d}")
 
 except KeyboardInterrupt:
     print(colored(f"\n{error}User Interrepted","red", attrs=['bold']))
     raise SystemExit
-
-#Port Integration: https://book.hacktricks.xyz/generic-methodologies-and-resources/pentesting-network
-
