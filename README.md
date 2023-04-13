@@ -1,4 +1,4 @@
-# ctfrecki 1.1
+# ctfrecki 1.2
 
 ## Introduction:
 
@@ -15,8 +15,6 @@ Pretty useful for HTB and other CTFs where you need to do things that are mainly
 ```sudo ./install.sh```
 
 ```chmod +x recon```
-
-For some hosts, like kali-linux, ignore any error or warning messages related to crackmapexec when running install.sh. The tool will still work properly.
 
 ## Usage:
 
