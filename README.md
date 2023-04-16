@@ -24,4 +24,4 @@ Pretty useful for HTB and other CTFs where you need to do things that are mainly
 
 ## Update 1.2.1: 
 
-BugFixes
+BugFixes.
