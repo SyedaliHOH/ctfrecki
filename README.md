@@ -22,7 +22,6 @@ Pretty useful for HTB and other CTFs where you need to do things that are mainly
 
 ```./recon -t 10.10.11.42```
 
-## Update 2.1:
+## Update 1.2.1: 
 
-Bugfixes
-
+BugFixes
