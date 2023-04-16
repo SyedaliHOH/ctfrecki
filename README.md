@@ -1,4 +1,4 @@
-# ctfrecki 1.2
+# ctfrecki 1.2.1
 
 ## Introduction:
 
@@ -21,4 +21,8 @@ Pretty useful for HTB and other CTFs where you need to do things that are mainly
 ```./recon -t https://example.com```
 
 ```./recon -t 10.10.11.42```
+
+## Update 2.1:
+
+Bugfixes
 
