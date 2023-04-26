@@ -1,6 +1,6 @@
 #!/usr/bin/python3
-
 #Importing Libaries:
+
 import os, re, argparse, subprocess, requests, requests.exceptions, time, ftplib, sys
 import dns.resolver
 import dns.zone
@@ -40,8 +40,6 @@ def portenum(enumtext):
 
 #Taking Main input and args
 
-import argparse
-
 parser = argparse.ArgumentParser()
 parser.add_argument("-t", "--target", help="Target Here, -t example.com", required="-v" not in sys.argv)
 
@@ -75,7 +73,7 @@ else:
 # Creating Folders for result:
 
 current_path = os.getcwd()
-parent_folder = "targets"
+parent_folder = "box"
 main_folder = target
 
 folder_path = parent_folder+"/"+main_folder
@@ -127,7 +125,7 @@ def nmap():
 
     print(f'\n{info}Starting In-Depth Scan on open ports scan against {target}')
 
-    nmap_deep_command = f"cat {parent_folder}/"+target+"/scans/fast-all-tcp.nmap | grep -e open | awk -F '/tcp' '{print $1}' > ./"+parent_folder+"/"+target+"/scans/portlist.txt && nmap -T4 -sC -sV -Pn -n -p $(tr '\n' ',' < ./"+parent_folder+"/"+target+"/scans/portlist.txt)  "+target+" -oN ./"+parent_folder+"/"+target+"/scans/long-scan.nmap"
+    nmap_deep_command = f"cat {parent_folder}/"+target+"/scans/fast-all-tcp.nmap | grep -e open | awk -F '/tcp' '{print $1}' > ./"+parent_folder+"/"+target+"/scans/portlist.txt && nmap -A -T4 -sC -sV -Pn -n -p $(tr '\n' ',' < ./"+parent_folder+"/"+target+"/scans/portlist.txt)  "+target+" -oN ./"+parent_folder+"/"+target+"/scans/long-scan.nmap"
     gt(nmap_deep_command.replace("\n", r"\n"))
     subprocess.run(nmap_deep_command, shell=True, check=True)
 
@@ -388,8 +386,8 @@ def httpenum(port):
         except Exception as e:
             return f"Error: {e}"
 
-    curl_command = f"curl -I -s -k {target}:{port} | tee ./{parent_folder}/{target}/HTTP/curl-{port}.txt"
-    whatweb_command = f"whatweb -a 3 {target}:{port} | tee ./{parent_folder}/{target}/HTTP/whatweb-{port}.txt"
+    curl_command = f"curl -I -s -k {target}:{port} | tee ./{parent_folder}/{target}/scans/curl-{port}.txt"
+    whatweb_command = f"whatweb -a 3 {target}:{port} | tee ./{parent_folder}/{target}/scans/whatweb-{port}.txt"
 
     print(f'{portenum(f"HTTP:{port}")}Checking Response Headers:')
     gt(f'{curl_command}')
@@ -438,7 +436,7 @@ def httpenum(port):
     gt(f'{paramspider}')
     os.system(paramspider)
 
-    print(f'{portenum(f"HTTP:{port}")}Testing HTTP Methods, results wont be stored for 2nd check:')
+    print(f'{portenum(f"HTTP:{port}")}Testing HTTP Methods')
     nmap_httptesting = f"nmap -p{port} -sV --script http-method-tamper {target} -oN ./{parent_folder}/{target}/scans/HTTP_Methods-{port}.txt"
     gt(f'{nmap_httptesting}')
     os.system(nmap_httptesting)
