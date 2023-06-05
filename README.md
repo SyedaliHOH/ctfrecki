@@ -1,4 +1,4 @@
-# ctfrecki 1.2.1
+# ctfrecki 1.3
 
 ## Introduction:
 
@@ -18,10 +18,20 @@ Pretty useful for HTB and other CTFs where you need to do things that are mainly
 
 ## Usage:
 
-```./recon -t https://example.com```
+Full Scan:
 
-```./recon -t 10.10.11.42```
+```./ctfrecon -t https://example.com```
 
-## Update 1.2.1: 
+```./ctfrecon -t 10.10.11.42```
 
-BugFixes.
+```./ctfrecon -t 10.10.11.42```
+
+Scan a specific port as a service:
+
+```./ctfrecon -t 10.10.11.214 -p 50051 http```
+
+## Update 1.3: 
+
+Added -p option
+Made 2 different files one for ctf(ctfrecon) and other for general recon(recon)
+Made ctfrecon more faster and efficient
