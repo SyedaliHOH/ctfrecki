@@ -32,6 +32,8 @@ Scan a specific port as a service:
 
 ## Update 1.3: 
 
-Added -p option
-Made 2 different files one for ctf(ctfrecon) and other for general recon(recon)
-Made ctfrecon more faster and efficient
+Added the -p option to specify a specific port for scanning.
+
+Implemented two different files: ctfrecon for CTF-specific recon and recon for general recon.
+
+Enhanced the speed and efficiency of ctfrecon for improved performance.
