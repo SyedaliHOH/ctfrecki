@@ -1,4 +1,4 @@
-# ctfrecki 1.3
+# ctfrecki 1.4
 
 ## Introduction:
 
@@ -25,10 +25,6 @@ Full Scan:
 ```./ctfrecon -t 10.10.11.42```
 
 ```./ctfrecon -t 10.10.11.42```
-
-Scan a specific port as a service:
-
-```./ctfrecon -t 10.10.11.214 -p 50051 http```
 
 ## Update 1.3: 
 
